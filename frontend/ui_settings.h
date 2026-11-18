@@ -2181,6 +2181,15 @@ inline void Menu::DrawSettings(Canvas& c, const std::string& title, const std::s
         y += (int)(nameLines.size() - 1) * K(32);
     }
     else T(c, pvX + pad, pvY + K(42), name, nameS, GlassText, true);
+    // (A cheat's button requirement: a bright card under the name, not just a line of small text.)
+    if (it.preview == P_CHEATNOTE && !it.sub.empty())
+    {
+        const int boxH = K(58);
+        Glass::Round(c, pvX + pad, y, innerW, boxH, 12 * k, 0x400A111C);
+        Glass::Rim(c, pvX + pad, y, innerW, boxH, 12 * k, std::max(1.0f, k), 0x60, 0x14);
+        TCentred(c, pvX + pad + innerW / 2, y + boxH / 2 + K(7), it.sub, K(21), GlassText, true);
+        y += boxH + K(12);
+    }
     // (The description stops above the tip at the foot of the preview: with larger menus on a short
     // screen it ran into it.)
     size_t descMax = wide ? 7 : 5;

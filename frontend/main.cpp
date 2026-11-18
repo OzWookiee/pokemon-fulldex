@@ -7739,6 +7739,28 @@ int main(int argc, char** argv)
                 if (showFolder && !c.category.empty()) d = "In " + c.category + ". " + d;
                 it.desc = d;
                 it.tip = c.group >= 0 ? "Only one in its folder can be on at a time. " + careful : careful;
+                // (A code that needs buttons only applies while they are held. The preview puts
+                // the combo in a bright card under the name, so turning it on does not look like
+                // it should already be working; the note reads "Button: START+L+R.".)
+                std::string lower = d;
+                for (char& ch : lower) ch = (char)std::tolower((unsigned char)ch);
+                const size_t b = lower.find("button");
+                if (b != std::string::npos)
+                {
+                    const size_t colon = d.find(':', b);
+                    if (colon != std::string::npos)
+                    {
+                        const size_t dot = d.find('.', colon);
+                        std::string activation = d.substr(colon + 1, dot == std::string::npos ? std::string::npos : dot - colon - 1);
+                        while (!activation.empty() && (activation.front() == ' ' || activation.front() == '\t')) activation.erase(0, 1);
+                        while (!activation.empty() && (activation.back() == ' ' || activation.back() == '\t')) activation.pop_back();
+                        if (!activation.empty())
+                        {
+                            it.sub = (lower.compare(b, 7, "buttons") == 0 ? "PRESS " : "HOLD ") + activation + " TO APPLY";
+                            it.preview = Menu::P_CHEATNOTE;
+                        }
+                    }
+                }
             };
             section("FIND", Glass::I_CHEATS);
             add(M_CSEARCH, "SEARCH", cheatQuery.empty() ? "" : Cheats::Fit(cheatQuery, 18));
