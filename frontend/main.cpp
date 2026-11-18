@@ -7162,7 +7162,7 @@ int main(int argc, char** argv)
                     {
                         const auto ahead = companionMetadata.EvolutionAhead(mon.species);
                         if (ahead.empty()) row("FINAL FORM","");
-                        else for (const auto& ev : ahead) row(title(ev),"");
+                        else for (const auto& ev : ahead) row(CleanFont::Title(ev),"");
                     }
                     section("STATS",Glass::I_GAUGE);
                     static const char* statNames[]={"HP","ATTACK","DEFENCE","SPEED","SP. ATK","SP. DEF"};
