@@ -2333,7 +2333,7 @@ inline void Menu::DrawSettings(Canvas& c, const std::string& title, const std::s
         Picture(c, P_PAD, it.art.empty() ? -1 : it.art[0], pvX + pad / 2, regionTop, pvW - pad, regionBottom - regionTop + K(10) - noteH, k);
         if (!padNote.empty()) TCentred(c, pvX + pvW / 2, regionBottom + K(6), padNote, K(15), Desc);
     }
-    else if (it.kind != K_BACK && it.kind != K_LINK && it.preview > P_NONE && choices > 0 && regionBottom - regionTop > K(60))
+    else if (it.kind != K_BACK && it.kind != K_LINK && it.preview > P_NONE && it.preview != P_CHEATNOTE && choices > 0 && regionBottom - regionTop > K(60))
     {
         // (FPS's film strips are wide: one above the other, each with its name beside it.)
         const bool side = it.preview == P_MOTION;
