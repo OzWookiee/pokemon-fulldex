@@ -2,6 +2,7 @@
 // or headless with scripted input, screenshots and state hashes for testing.
 #ifdef __ANDROID__
 #include <sys/system_properties.h>
+#include <sched.h>
 #endif
 #include <algorithm>
 #include "folders.h"
@@ -2035,8 +2036,47 @@ static bool ReadSnapshot(NDS& nds, const std::string& path, uint32_t* frame, boo
     return true;
 }
 
+// The emulation and the picture both run on this thread, and Android likes to put a thread
+// that waits now and then on one of the phone's small cores at a low clock. That shows up as
+// frames a few milliseconds late (the Pixel 3's present jitter). Keep it on the faster cores,
+// as the wide-GPU thread already does for itself. SSR_MAIN_ANYCORE=1 leaves it alone.
+#ifdef __ANDROID__
+static void KeepMainThreadOffSmallCores()
+{
+    if (getenv("SSR_MAIN_ANYCORE")) return;
+    long top[64] {}, lowest = 0, highest = 0;
+    int n = 0;
+    for (; n < 64; n++)
+    {
+        char path[96];
+        snprintf(path, sizeof(path), "/sys/devices/system/cpu/cpu%d/cpufreq/cpuinfo_max_freq", n);
+        FILE* f = fopen(path, "r");
+        if (!f) break;
+        if (fscanf(f, "%ld", &top[n]) != 1) top[n] = 0;
+        fclose(f);
+        if (!n || top[n] < lowest) lowest = top[n];
+        if (top[n] > highest) highest = top[n];
+    }
+    if (n < 2 || lowest == highest || lowest <= 0) return;
+    cpu_set_t set;
+    CPU_ZERO(&set);
+    int kept = 0;
+    for (int i = 0; i < n; i++)
+        if (top[i] > lowest)
+        {
+            CPU_SET(i, &set);
+            kept++;
+        }
+    if (kept && sched_setaffinity(0, sizeof(set), &set) == 0)
+        fprintf(stderr, "[cpu] the main thread keeps to the %d faster cores of %d\n", kept, n);
+}
+#endif
+
 int main(int argc, char** argv)
 {
+#ifdef __ANDROID__
+    KeepMainThreadOffSmallCores();
+#endif
     Options opt;
 #ifdef __ANDROID__
     // Started from the app icon: the ROM is packed in the APK, the save and the settings
