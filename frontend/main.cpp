@@ -7758,6 +7758,13 @@ int main(int argc, char** argv)
                         {
                             it.sub = (lower.compare(b, 7, "buttons") == 0 ? "PRESS " : "HOLD ") + activation + " TO APPLY";
                             it.preview = Menu::P_CHEATNOTE;
+                            // (The card says it: drop the same "Button: ..." sentence from the
+                            // description, keeping any other note text.)
+                            const size_t end = d.find('.', colon);
+                            std::string rest = d.substr(0, b) + d.substr(end == std::string::npos ? d.size() : end + 1);
+                            while (!rest.empty() && (rest.back() == ' ' || rest.back() == '.')) rest.pop_back();
+                            while (!rest.empty() && rest.front() == ' ') rest.erase(0, 1);
+                            it.desc = rest;
                         }
                     }
                 }
