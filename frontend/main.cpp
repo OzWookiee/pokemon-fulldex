@@ -6951,15 +6951,10 @@ int main(int argc, char** argv)
                         e.learns.push_back(l);
                     }
                     std::stable_sort(e.learns.begin(), e.learns.end(), [](const auto& a, const auto& b) { return a.level < b.level; });
-                    for (const auto& detail : companionMetadata.EvolutionDetails(id))
-                    {
-                        // ("EVOLVES TO QUILAVA: LEVEL 14" as "Evolves into Quilava: Level 14")
-                        std::string line = title(detail);
-                        const size_t to = line.find(' ');
-                        const size_t name = line.find(' ', to + 1);
-                        if (to != std::string::npos && name != std::string::npos) line = "Evolves into" + line.substr(name);
-                        e.evolutions.push_back(line);
-                    }
+                    // (The whole family for the POKEDEX: earlier forms, this one and every branch;
+                    // the party page shows only what is ahead.)
+                    for (const auto& detail : companionMetadata.EvolutionFamily(id))
+                        e.evolutions.push_back(title(detail));
                     if (full) dexEntryMore(e, id);
                 }
                 return e;
@@ -7163,6 +7158,12 @@ int main(int argc, char** argv)
                 {
                     row("HP",std::to_string(mon.hp)+" / "+std::to_string(mon.maxHp)+(mon.status?"  "+std::string(Companion::Status(mon.status)):std::string()));
                     row("HOLDING",mon.item?companionMetadata.ItemName(mon.item):std::string("NOTHING"));
+                    section("EVOLUTION",Glass::I_PEOPLE);
+                    {
+                        const auto ahead = companionMetadata.EvolutionAhead(mon.species);
+                        if (ahead.empty()) row("FINAL FORM","");
+                        else for (const auto& ev : ahead) row(title(ev),"");
+                    }
                     section("STATS",Glass::I_GAUGE);
                     static const char* statNames[]={"HP","ATTACK","DEFENCE","SPEED","SP. ATK","SP. DEF"};
                     for(int i=0;i<6;i++)
