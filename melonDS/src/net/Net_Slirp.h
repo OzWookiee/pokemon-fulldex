@@ -51,12 +51,22 @@ public:
     int SendPacket(u8* data, int len) noexcept override;
     void RecvCheck() noexcept override;
 
-    // Nintendo WFC through a community server (AltWFC/WFZwei and the like): the names under
-    // nintendowifi.net resolve to `ip` (host byte order) instead of the real, long-closed
-    // servers. 0 turns it off. Read by the network thread, set from the UI thread.
-    static void SetWFCRedirect(u32 ip) noexcept { WFCRedirectIP.store(ip, std::memory_order_relaxed); }
+    // Nintendo WFC through a community server (WfcServers.h): when `on`, the names under
+    // nintendowifi.net are answered by that server instead of the real, long-closed ones.
+    // FORWARD (`forward`) sends the game's own DNS query to `primary` (host byte order) and
+    // answers with what it says, trying `alternate` if it does not reply. DIRECT gives every
+    // name `primary`. Read by the network thread, set from the UI thread.
+    static void SetWFCRedirect(bool on, bool forward, u32 primary, u32 alternate) noexcept
+    {
+        // (The addresses first, so the mode that reads them is the last word.)
+        WFCPrimary.store(primary, std::memory_order_relaxed);
+        WFCAlternate.store(alternate, std::memory_order_relaxed);
+        WFCMode.store(!on ? 0 : forward ? 2 : 1, std::memory_order_release);
+    }
 private:
-    static std::atomic<u32> WFCRedirectIP;
+    static std::atomic<int> WFCMode; // 0 off, 1 direct, 2 forward
+    static std::atomic<u32> WFCPrimary;
+    static std::atomic<u32> WFCAlternate;
     static constexpr int PollListMax = 64;
     static const SlirpCb cb;
     static int SlirpCbGetREvents(int idx, void* opaque) noexcept;

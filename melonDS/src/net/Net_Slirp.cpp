@@ -30,9 +30,12 @@
 	#include <ws2tcpip.h>
 #else
 	#include <sys/socket.h>
+	#include <sys/time.h>
+	#include <netinet/in.h>
 	#include <netdb.h>
 	#include <poll.h>
 	#include <time.h>
+	#include <unistd.h>
 #endif
 
 namespace melonDS
@@ -48,7 +51,9 @@ const u32 kClientIP = kSubnet | 0x10;
 
 const u8 kServerMAC[6] = {0x00, 0xAB, 0x33, 0x28, 0x99, 0x44};
 
-std::atomic<u32> Net_Slirp::WFCRedirectIP {0};
+std::atomic<int> Net_Slirp::WFCMode {0};
+std::atomic<u32> Net_Slirp::WFCPrimary {0};
+std::atomic<u32> Net_Slirp::WFCAlternate {0};
 
 #ifdef __WIN32__
 
@@ -211,6 +216,62 @@ void FinishUDPFrame(u8* data, int len)
     *(u16*)&udpheader[6] = htons(tmp);
 }
 
+// A DNS query (the game's own, without the Ethernet/IP/UDP headers) is sent to `server`'s DNS
+// (host byte order) and its reply is copied to `reply`. Returns the reply's length, or 0 if the
+// server did not answer in time. (Like the getaddrinfo below, this waits: a moment once per WFC
+// name, while the game's first connection is set up, and not again.)
+static int ForwardDNSQuery(const u8* query, int length, u32 server, u8* reply, int capacity) noexcept
+{
+#ifdef __WIN32__
+    typedef SOCKET dns_socket;
+    const dns_socket socket_type = INVALID_SOCKET;
+#else
+    typedef int dns_socket;
+    const dns_socket socket_type = -1;
+#endif
+
+    const dns_socket sock = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+    if (sock == socket_type) return 0;
+
+#ifdef __WIN32__
+    DWORD timeout = 1000;
+    setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, (const char*)&timeout, sizeof(timeout));
+#else
+    struct timeval timeout;
+    timeout.tv_sec = 1;
+    timeout.tv_usec = 0;
+    setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout));
+#endif
+
+    struct sockaddr_in to;
+    memset(&to, 0, sizeof(to));
+    to.sin_family = AF_INET;
+    to.sin_port = htons(53);
+    to.sin_addr.s_addr = htonl(server); // (network byte order)
+
+    int got = 0;
+    if ((long long)sendto(sock, (const char*)query, length, 0, (struct sockaddr*)&to, sizeof(to)) == (long long)length)
+    {
+        struct sockaddr_in from;
+        memset(&from, 0, sizeof(from));
+#ifdef __WIN32__
+        int fromlength = sizeof(from);
+#else
+        socklen_t fromlength = sizeof(from);
+#endif
+        const int n = (int)recvfrom(sock, (char*)reply, capacity, 0, (struct sockaddr*)&from, &fromlength);
+        // (The same ID: a reply to this query, and a whole DNS message.)
+        if (n >= 12 && length >= 2 && query[0] == reply[0] && query[1] == reply[1]) got = n;
+    }
+
+#ifdef __WIN32__
+    closesocket(sock);
+#else
+    close(sock);
+#endif
+    return got;
+}
+
 void Net_Slirp::HandleDNSFrame(u8* data, int len) noexcept
 {
     u8* ipheader = &data[0xE];
@@ -235,8 +296,10 @@ void Net_Slirp::HandleDNSFrame(u8* data, int len) noexcept
     if (flags & 0x8000) return;
     if (numquestions != 1 || numanswers != 0) return;
 
-    u8 resp[1024];
+    u8 resp[1536]; // (room for a forwarded reply's whole DNS message)
     u8* out = &resp[0];
+    u8 forwardbuf[1024];
+    bool forwarded = false;
 
     // ethernet
     memcpy(out, &data[6], 6); out += 6;
@@ -322,15 +385,59 @@ void Net_Slirp::HandleDNSFrame(u8* data, int len) noexcept
 		// get answer
 		struct addrinfo dns_hint;
 		struct addrinfo* dns_res;
-		u32 addr_res;
+		u32 addr_res = 0;
 
-		const u32 wfc = WFCRedirectIP.load(std::memory_order_relaxed);
-		if (wfc && Wfc::IsName(domainname))
+		const int wfcMode = WFCMode.load(std::memory_order_acquire);
+		const u32 wfc = WFCPrimary.load(std::memory_order_relaxed);
+		if (wfcMode && Wfc::IsName(domainname))
 		{
-			// Nintendo WFC's servers are gone: the community server takes their place.
-			addr_res = htonl(wfc);
-			fprintf(stderr, "[wfc] %s -> %u.%u.%u.%u (community server)\n", domainname,
-			        wfc >> 24, (wfc >> 16) & 0xFF, (wfc >> 8) & 0xFF, wfc & 0xFF);
+			if (wfcMode == 2)
+			{
+				// FORWARD (WfcServers.h): the community server's own DNS answers each name, so
+				// the services at different addresses resolve as that server means them to.
+				const u32 alternate = WFCAlternate.load(std::memory_order_relaxed);
+				// (The UDP length, not the frame's: Ethernet pads a short frame. A DNS message is
+				// at least its 12-byte header.)
+				int querylen = (int)ntohs(*(u16*)&udpheader[4]) - 8;
+				if (querylen < 12 || querylen > len - 0x2A) querylen = 0;
+
+				int replylen = 0;
+				u32 answerer = 0;
+				if (querylen > 0 && querylen <= (int)sizeof(forwardbuf))
+				{
+					replylen = ForwardDNSQuery(dnsbody, querylen, wfc, forwardbuf, sizeof(forwardbuf));
+					if (replylen > 0) answerer = wfc;
+				}
+				if (replylen == 0 && alternate && querylen > 0 && querylen <= (int)sizeof(forwardbuf))
+				{
+					replylen = ForwardDNSQuery(dnsbody, querylen, alternate, forwardbuf, sizeof(forwardbuf));
+					if (replylen > 0) answerer = alternate;
+				}
+
+				if (replylen > 0 && replylen <= (int)(sizeof(resp) - (resp_body - resp)))
+				{
+					// (The server's whole reply replaces the one outlined above, its header too.)
+					memcpy(resp_body, forwardbuf, replylen);
+					out = resp_body + replylen;
+					forwarded = true;
+					fprintf(stderr, "[wfc] %s -> the community server's DNS %u.%u.%u.%u (%d bytes)\n",
+					        domainname, answerer >> 24, (answerer >> 16) & 0xFF, (answerer >> 8) & 0xFF,
+					        answerer & 0xFF, replylen);
+				}
+				else
+				{
+					// (No answer: 0.0.0.0, as the local resolver gives for a name it cannot find.)
+					fprintf(stderr, "[wfc] %s: the community server's DNS did not answer\n", domainname);
+					addr_res = 0;
+				}
+			}
+			else
+			{
+				// Nintendo WFC's servers are gone: the community server takes their place.
+				addr_res = htonl(wfc);
+				fprintf(stderr, "[wfc] %s -> %u.%u.%u.%u (community server)\n", domainname,
+				        wfc >> 24, (wfc >> 16) & 0xFF, (wfc >> 8) & 0xFF, wfc & 0xFF);
+			}
 		}
 		else
 		{
@@ -362,14 +469,17 @@ void Net_Slirp::HandleDNSFrame(u8* data, int len) noexcept
 		printf("\n");
 		curoffset += 4;
 
-		// TODO: betterer support
-		// (under which conditions does the C00C marker work?)
-		*(u16*)out = htons(0xC00C); out += 2;
-		*(u16*)out = htons(type); out += 2;
-		*(u16*)out = htons(cls); out += 2;
-		*(u32*)out = htonl(3600); out += 4; // TTL (hardcoded for now)
-		*(u16*)out = htons(4); out += 2; // address length
-		*(u32*)out = addr_res; out += 4; // address
+		if (!forwarded)
+		{
+			// TODO: betterer support
+			// (under which conditions does the C00C marker work?)
+			*(u16*)out = htons(0xC00C); out += 2;
+			*(u16*)out = htons(type); out += 2;
+			*(u16*)out = htons(cls); out += 2;
+			*(u32*)out = htonl(3600); out += 4; // TTL (hardcoded for now)
+			*(u16*)out = htons(4); out += 2; // address length
+			*(u32*)out = addr_res; out += 4; // address
+		}
     }
 
     u32 framelen = (u32)(out - &resp[0]);
@@ -401,7 +511,7 @@ int Net_Slirp::SendPacket(u8* data, int len) noexcept
             // (With the community WFC redirect on, any DNS server is answered here, so a game
             // with an old DNS setting set in its WFC settings still reaches the server.)
             if (dstport == 53 && (htonl(*(u32*)&data[0x1E]) == kDNSIP ||
-                                  WFCRedirectIP.load(std::memory_order_relaxed) != 0)) // DNS
+                                  WFCMode.load(std::memory_order_relaxed) != 0)) // DNS
             {
                 HandleDNSFrame(data, len);
                 return len;

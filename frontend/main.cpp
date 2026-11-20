@@ -25,6 +25,7 @@
 #include "ssr_os.h"
 #ifdef SSR_NET
 #include "net/Net_Slirp.h" // (NINTENDO WFC's community server: SetWFCRedirect)
+#include "net/WfcServers.h" // (the servers it chooses from, and wfc_server's forms)
 #endif
 #ifdef SSR_IOS
 #include "ios_orient.h"
@@ -1733,9 +1734,10 @@ struct Settings : OptionalFeatures
     std::string gbaLcd; // Empty keeps the GBA player's existing LCD preference.
     std::string romsFolder, savesFolder; // Keep launcher paths when in-game settings are saved.
     std::string listColour, listBackground, listLang, listSort; // (GAME LIST: COLOUR, BACKGROUND; LANGUAGE)
-    // NINTENDO WFC (OptionalFeatures::wfc): the community server that answers nintendowifi.net.
-    // AltWFC/WFZwei, whose event list has the most Mystery Gifts; any other by its address.
-    std::string wfcServer = "172.104.88.237";
+    // NINTENDO WFC (OptionalFeatures::wfc): the community server that answers nintendowifi.net,
+    // by key from WfcServers.h ("altwfc"), or an address of one's own: an IPv4 address (every
+    // WFC name goes there) or "dns:<IPv4>" (that server's own DNS answers each name).
+    std::string wfcServer = "altwfc";
     bool cpuBoost = true; // Switch only: the processor's boost mode (see SwitchPlatform)
     bool jit = true;      // Switch, games that are not recompiled: melonDS's JIT (read at start-up)
     bool fastMem = true;  // ... and its fast memory (also read at start-up)
@@ -2073,18 +2075,21 @@ static std::string EvoTr(const std::string& line)
 }
 
 // NINTENDO WFC (OptionalFeatures::wfc): Nintendo's servers are closed, so the names under
-// nintendowifi.net are answered with a community server's address by melonDS's user-mode DNS,
-// and the games' own online play and Mystery Gifts work. The address is wfc_server.
+// nintendowifi.net are answered by a community server (WfcServers.h) by melonDS's user-mode DNS,
+// and the games' own online play and Mystery Gifts work. wfc_server names one of the list or
+// gives an address of its own.
 static void ApplyWfcSetting(const Settings& s)
 {
 #ifdef SSR_NET
-    unsigned a = 0, b = 0, c = 0, d = 0;
-    const bool parsed = sscanf(s.wfcServer.c_str(), "%u.%u.%u.%u", &a, &b, &c, &d) == 4 &&
-                        a < 256 && b < 256 && c < 256 && d < 256;
-    const unsigned ip = s.wfc && parsed ? (a << 24) | (b << 16) | (c << 8) | d : 0;
-    melonDS::Net_Slirp::SetWFCRedirect(ip);
-    if (s.wfc && !parsed) fprintf(stderr, "[wfc] wfc_server is not an IPv4 address: %s\n", s.wfcServer.c_str());
-    else fprintf(stderr, "[wfc] %s\n", ip ? ("community server " + s.wfcServer).c_str() : "off");
+    melonDS::Wfc::Target target;
+    const bool known = melonDS::Wfc::ParseTarget(s.wfcServer.c_str(), target);
+    melonDS::Net_Slirp::SetWFCRedirect(s.wfc && known,
+                                      target.mode == melonDS::Wfc::Mode::Forward,
+                                      target.primary, target.alternate);
+    if (!s.wfc) fprintf(stderr, "[wfc] off\n");
+    else if (!known) fprintf(stderr, "[wfc] wfc_server is not a known server or an IPv4 address: %s\n", s.wfcServer.c_str());
+    else fprintf(stderr, "[wfc] community server %s (%s)\n", s.wfcServer.c_str(),
+                 target.mode == melonDS::Wfc::Mode::Forward ? "its DNS, per name" : "one address");
 #else
     (void)s;
 #endif
@@ -6102,7 +6107,7 @@ int main(int argc, char** argv)
         M_COMPANION, M_CPARTY, M_CBAG, M_CDEX, M_CLOCATION, M_CMAP, M_CENCOUNTERS, M_REFERENCE, M_REFERENCE_KIND, M_REFERENCE_QUERY, M_CPOCKET, M_CDEX_FILTER, M_CDEX_TYPE, M_CBATTLE, M_CGUIDE, M_CGUIDE_REVEAL, M_CGUIDE_NEXT, M_CGUIDE_HERE, M_NUZLOCKE, M_RUN_ENABLED, M_RUN_RESET, M_RUN_RESET_CONFIRM, M_QUICK_ACTIONS, M_OPEN_PC, M_FLY, M_HUB_SAVE, M_HUB_LOAD, M_HUB_CHEATS, M_HUB_FAST, M_HUB_SETTINGS, M_HUB_QUIT,
         M_QUIT_YES, M_RESET_YES, // (QUIT GAME / RESET GAME asked first: PAGE_QUIT_CONFIRM)
         M_SHORTCUTS, // (CONTROLS: Fulldex's own four shortcuts, opening KEYS AND BUTTONS at them)
-        M_EXTRAS, M_EXTRA0=92000, M_EXTRA_END=92007, M_PLAYBACK=93000, M_FAST_SPEED, M_SMART_FAST, M_SLOW_MOTION, M_REWIND_MB, M_REWIND, M_TURBO_A, M_SCREEN_FILTER, M_COMPANION_OVERLAY, M_PARTY_HUD, M_STATUS_BAR, M_LIVE_GLASS, M_FAST_BUTTON, M_ZOOM, M_ZOOM_TEXT,
+        M_EXTRAS, M_WFC_SERVER, M_EXTRA0=92000, M_EXTRA_END=92007, M_PLAYBACK=93000, M_FAST_SPEED, M_SMART_FAST, M_SLOW_MOTION, M_REWIND_MB, M_REWIND, M_TURBO_A, M_SCREEN_FILTER, M_COMPANION_OVERLAY, M_PARTY_HUD, M_STATUS_BAR, M_LIVE_GLASS, M_FAST_BUTTON, M_ZOOM, M_ZOOM_TEXT,
         M_STATES, M_SLOT_SAVE, M_SLOT_LOAD, M_SLOT_PREVIOUS, M_UNDO_LOAD, M_AUTO_STATE, M_AUTO_RESUME,
         M_KEY0=94000, M_KEY_LAYER=94900, M_KEY_SPACE, M_KEY_DEL, M_KEY_DONE, M_KEY_SYMBOLS, // (the keyboard's keys, Menu::keyGrid: SEARCH, the log in)
         M_FLY0=96000, M_CPARTY0=80000, M_CDEX0=81000, M_CITEM0=83000, M_RRESULT0=86000, M_SLOT0=90000, M_GUIDE0=91000, M_CGUIDE_GYM0=91100,
@@ -6581,6 +6586,21 @@ int main(int argc, char** argv)
                 toggle(M_EXTRA0+(int)i,options[i].name,icons[std::min<size_t>(i,5)],Menu::P_NONE,cfg.*options[i].value,options[i].help,
                        "Live updates are in Companion; the HUD, companion window and filters in Display; speed, rewind and turbo in Playback.");
             }
+#ifdef SSR_NET
+            // (Once NINTENDO WFC is on: which community server answers the games' WFC names, from
+            // WfcServers.h. Another server by its address in wfc_server.)
+            if(cfg.wfc)
+            {
+                size_t serverCount;const auto* servers=melonDS::Wfc::Servers(serverCount);
+                std::vector<std::string> serverNames;
+                for(size_t i=0;i<serverCount;i++)serverNames.push_back(servers[i].name);
+                picker(M_WFC_SERVER,"WFC SERVER",Glass::I_GLOBE,Menu::P_NONE,serverNames,melonDS::Wfc::IndexOf(cfg.wfcServer.c_str()),
+                       "The community server that answers Nintendo WFC: online play and Mystery Gifts.",
+                       "Left and right change it. Another server by its address in wfc_server in settings.cfg.");
+                // (An address set by hand: shown as it is.)
+                if(melonDS::Wfc::IndexOf(cfg.wfcServer.c_str())<0&&!cfg.wfcServer.empty())menu.items.back().value=cfg.wfcServer;
+            }
+#endif
         }
         else if (menuPage == PAGE_DISPLAY)
         {
@@ -10905,6 +10925,19 @@ int main(int argc, char** argv)
                 bw1.battleButtons = cfg.battleButtons;
                 break;
             case M_NAVSTYLE: cfg.navStyle = (std::clamp(cfg.navStyle, 0, 4) + (dir < 0 ? 4 : 1)) % 5; cfg.Save(opt.config); break;
+#ifdef SSR_NET
+            case M_WFC_SERVER:
+            {
+                size_t serverCount;const auto* servers=melonDS::Wfc::Servers(serverCount);
+                const int current=melonDS::Wfc::IndexOf(cfg.wfcServer.c_str());
+                const int next=current<0 ? (dir<0?(int)serverCount-1:0)
+                                         : (current+(dir<0?(int)serverCount-1:1))%(int)serverCount;
+                cfg.wfcServer=servers[next].key;
+                ApplyWfcSetting(cfg);
+                cfg.Save(opt.config);
+                break;
+            }
+#endif
             case M_FPS60:
                 cfg.fps60 = !cfg.fps60;
                 nds->GPU.GPU3D.InterpolationEnabled = cfg.fps60;

@@ -8262,6 +8262,13 @@ inline std::vector<Setting> SettingsList()
 #endif
         l.push_back({extras[i].key,extras[i].name,onOff,"0",extras[i].help});
     }
+#ifdef SSR_NET
+    // (Which community server answers Nintendo WFC once it is on. Keep in step with WfcServers.h,
+    // which the game resolves wfc_server through; an address of one's own is set in the settings
+    // file by hand.)
+    l.push_back({ "wfc_server", "WFC SERVER", { { "altwfc", "ALTWFC / WFZWEI" }, { "wiimmfi", "WIMMFI" } }, "altwfc",
+                  "WHICH COMMUNITY SERVER ANSWERS NINTENDO WFC ONCE IT IS ON: ALT WFC (THE MOST MYSTERY GIFTS) OR WIMMFI. ANOTHER SERVER BY ITS ADDRESS, OR DNS: AND ITS DNS, IN WFC_SERVER IN THE SETTINGS FILE." });
+#endif
 #if !defined(__SWITCH__)
     // RetroAchievements from the game list too (pc_launcher.cpp: the login, as the pause menu's).
     l.push_back({ "ra", "RETROACHIEVEMENTS", onOff, "0",
@@ -8334,6 +8341,7 @@ inline int GroupOf(const Setting& s)
     if (s.key && (!strcmp(s.key, "!folders") || !strcmp(s.key, "!states_folder") || !strcmp(s.key, "!cheats_folder") || !strcmp(s.key, "!settings_folder"))) return 6;
     if (!s.key) return !strcmp(s.name, "KEYS AND BUTTONS") ? 3 : !strcmp(s.name, "RELEASE NOTES") ? 8 : 7;
     if (!strncmp(s.key,"extra_",6)) return 9;
+    if (!strcmp(s.key, "wfc_server")) return 9;
     if (!strcmp(s.key, "list_lang")) return 0;
     if (!strncmp(s.key, "list_", 5)) return 6;
     if (!strcmp(s.key, "ra") || !strcmp(s.key, "!ra_login")) return 7;

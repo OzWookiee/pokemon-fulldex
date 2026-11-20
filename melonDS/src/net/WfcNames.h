@@ -1,8 +1,9 @@
 #pragma once
 // The names Nintendo WFC used (and the games still ask for): the subscription server (nas),
 // the DWC and game-stats parts, and the connection test. When a community server stands in for
-// Nintendo's closed ones, these names resolve to it (Net_Slirp.cpp); every other name resolves
-// as before. On its own here so the rule can be tested without the emulator.
+// Nintendo's closed ones, these names are answered by it (Net_Slirp.cpp: one address for all of
+// them, or its own DNS asked); every other name resolves as before. On its own here so the rule
+// can be tested without the emulator.
 #include <cstring>
 
 namespace melonDS::Wfc
