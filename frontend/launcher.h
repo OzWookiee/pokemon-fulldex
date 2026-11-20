@@ -8267,7 +8267,7 @@ inline std::vector<Setting> SettingsList()
     // which the game resolves wfc_server through; an address of one's own is set in the settings
     // file by hand.)
     l.push_back({ "wfc_server", "WFC SERVER", { { "altwfc", "ALTWFC / WFZWEI" }, { "wiimmfi", "WIMMFI" } }, "altwfc",
-                  "WHICH COMMUNITY SERVER ANSWERS NINTENDO WFC ONCE IT IS ON: ALT WFC (THE MOST MYSTERY GIFTS) OR WIMMFI. ANOTHER SERVER BY ITS ADDRESS, OR DNS: AND ITS DNS, IN WFC_SERVER IN THE SETTINGS FILE." });
+                  "WHICH COMMUNITY SERVER ANSWERS NINTENDO WFC ONCE IT IS ON: ALT WFC (THE MOST MYSTERY GIFTS) OR WIMMFI. ANOTHER SERVER BY ITS ADDRESS, OR DNS: AND ITS DNS, IN WFC_SERVER IN THE SETTINGS FILE. WIMMFI NEEDS WFCPATCHER'S NO-SSL CHANGE, WHICH FULLDEX APPLIES IN MEMORY; A SAVE USED ON NINTENDO'S OLD SERVERS MUST ERASE ITS WFC ID ONCE (ERROR 60000)." });
 #endif
 #if !defined(__SWITCH__)
     // RetroAchievements from the game list too (pc_launcher.cpp: the login, as the pause menu's).

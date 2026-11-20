@@ -498,7 +498,11 @@ Other languages add theirs to the name (`heartgold-it.sav`, `black2-es.sav` ...)
   the game's own online menus: Mystery Gift's **GET VIA NINTENDO WFC**, the GTS, trades and
   battles. The gifts arrive one at a time through the game itself, as they did from Nintendo's
   servers; which events are up is the community server's choice, and the community servers are
-  not run by this project.
+  not run by this project. Wiimmfi needs the change [WfcPatcher](https://github.com/AdmiralCurtiss/WfcPatcher)
+  makes to a ROM's Web addresses (its "NoSSL" patch): Fulldex makes that change in the game's
+  memory instead, so your ROM file is untouched. A save that used Nintendo's old servers has an
+  old WFC ID that Wiimmfi cannot take: in the game, **NINTENDO WFC SETTINGS > OPTIONS > ERASE
+  NINTENDO WFC CONFIGURATION** once (error 60000), then set the connection up again.
 
 ### Updates
 

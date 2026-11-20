@@ -26,6 +26,8 @@
 #ifdef SSR_NET
 #include "net/Net_Slirp.h" // (NINTENDO WFC's community server: SetWFCRedirect)
 #include "net/WfcServers.h" // (the servers it chooses from, and wfc_server's forms)
+#include "wfc_nossl.h"      // (WfcPatcher's NoSSL change, applied in memory for a DNS relay)
+#include <atomic>
 #endif
 #ifdef SSR_IOS
 #include "ios_orient.h"
@@ -2078,11 +2080,18 @@ static std::string EvoTr(const std::string& line)
 // nintendowifi.net are answered by a community server (WfcServers.h) by melonDS's user-mode DNS,
 // and the games' own online play and Mystery Gifts work. wfc_server names one of the list or
 // gives an address of its own.
+#ifdef SSR_NET
+// A server chosen as a DNS relay (Wiimmfi and the like) needs WfcPatcher's NoSSL change for DS
+// games; the emulation thread applies it in the DS's memory (wfc_nossl.h) while this is set.
+static std::atomic<bool> WfcNoSslOn {false};
+#endif
+
 static void ApplyWfcSetting(const Settings& s)
 {
 #ifdef SSR_NET
     melonDS::Wfc::Target target;
     const bool known = melonDS::Wfc::ParseTarget(s.wfcServer.c_str(), target);
+    WfcNoSslOn.store(s.wfc && known && target.mode == melonDS::Wfc::Mode::Forward, std::memory_order_relaxed);
     melonDS::Net_Slirp::SetWFCRedirect(s.wfc && known,
                                       target.mode == melonDS::Wfc::Mode::Forward,
                                       target.primary, target.alternate);
@@ -6596,7 +6605,7 @@ int main(int argc, char** argv)
                 for(size_t i=0;i<serverCount;i++)serverNames.push_back(servers[i].name);
                 picker(M_WFC_SERVER,"WFC SERVER",Glass::I_GLOBE,Menu::P_NONE,serverNames,melonDS::Wfc::IndexOf(cfg.wfcServer.c_str()),
                        "The community server that answers Nintendo WFC: online play and Mystery Gifts.",
-                       "Left and right change it. Another server by its address in wfc_server in settings.cfg.");
+                       "Left and right change it. A DNS server such as Wiimmfi gets WfcPatcher's NoSSL change in memory (the ROM is not changed); a save used on Nintendo's old servers asks to erase its WFC ID once (error 60000).");
                 // (An address set by hand: shown as it is.)
                 if(melonDS::Wfc::IndexOf(cfg.wfcServer.c_str())<0&&!cfg.wfcServer.empty())menu.items.back().value=cfg.wfcServer;
             }
@@ -8761,6 +8770,15 @@ int main(int argc, char** argv)
             if (funcWatchOn) funcWatch.NextFrame();
             const double f0 = perfNow();
             nds->RunFrame();
+#ifdef SSR_NET
+            // (WfcPatcher's NoSSL change in the DS's memory, for a server chosen as a DNS relay
+            // (Wiimmfi and the like): its URL strings use plain HTTP. The ROM file is untouched.)
+            if (WfcNoSslOn.load(std::memory_order_relaxed) && (rc_frame % 30) == 0)
+            {
+                const int fixed = WfcNoSsl::Apply(nds->MainRAM, (size_t)nds->MainRAMMask + 1);
+                if (fixed > 0) fprintf(stderr, "[wfc] NoSSL: %d URL(s) switched to http in memory\n", fixed);
+            }
+#endif
             if (emuSpeed > 1)
             {
                 double& part = i == emuSpeed - 1 ? ffShownMs : ffHiddenMs;
