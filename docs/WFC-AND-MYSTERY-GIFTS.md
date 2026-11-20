@@ -170,7 +170,7 @@ Code map:
 | `melonDS/src/net/Net_Slirp.cpp` | answers the DS's DNS; direct and forward modes; replies come from the queried server |
 | `melonDS/src/net/WfcNames.h` | the WFC name rule (label boundary; tested by `tests/test_wfc_dns.py`) |
 | `melonDS/src/net/WfcServers.h` | the server table and `wfc_server` forms (tested by `tests/local_wfc_servers.cpp`) |
-| `frontend/wfc_nossl.h` | the in-memory NoSSL scanner |
+| `frontend/wfc_nossl.h` | the in-memory NoSSL scanner (tested by `tests/test_wfc_nossl.py`) |
 | `docs/WFC-AND-MYSTERY-GIFTS.md` | this page |
 
 Notes:
@@ -196,6 +196,11 @@ Notes:
   Gift receive ("super-fast Mewtwo", gift written to `black.sav`). Wiimmfi forward with the
   in-memory NoSSL patch and a fresh WFC ID — login, distribution list, gift received. Both in
   the game's own menus.
-- **Linux:** compiles and the DNS/NoSSL unit tests pass.
+- **Linux:** compiles; `tests/test_wfc_dns.py` and `tests/test_wfc_nossl.py` pass.
 - **Steam Deck:** AltWFC direct — full Mystery Gift receive.
-- Windows, macOS and iOS have not been exercised for this feature yet.
+- **Windows:** the release builds (MinGW), and a probe built from the Windows binaries passed
+  direct mode (WFC name answered with the AltWFC address, reply from the DNS server asked),
+  forward mode through Wiimmfi's DNS, the alternate address answering when the primary does not,
+  and the in-memory NoSSL change. The full in-game receive has not been run on Windows yet: it
+  needs a logged-in desktop session (SSH is session 0); see `AGENTS.md` for the test setup.
+- macOS and iOS have not been exercised for this feature yet.
