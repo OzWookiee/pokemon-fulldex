@@ -133,6 +133,23 @@ implying it passed.
 - When you change generated files, change the generator or source JSON and regenerate;
   never edit generated headers directly.
 
+## Remote Windows testing
+
+- **SSH runs in session 0.** GUI programs and synthetic input (`SendInput`) only work in a
+  logged-in interactive session. Check `qwinsta` first; with no user session, only headless/CLI
+  checks and packet-level network tests are possible.
+- **Preferred unattended setup:** a dedicated local test user with **Autologon**, plus a
+  scheduled task at logon that runs a small agent in that session (`SendInput` for keys,
+  `CopyFromScreen` for screenshots, commands exchanged through a folder). Drive it over SSH.
+  Never put the test account's password in the repository or on a command line.
+- **Alternative:** log in once over RDP and keep the session alive
+  (`tscon <id> /dest:console`), then run helpers inside it with
+  `schtasks /create ... /it` or `psexec -i <session>`.
+- Fulldex takes keyboard input, so menu automation needs only key sequences (arrows, A/B,
+  START/SELECT), not mouse coordinates; take a screenshot after each step to confirm it.
+- A Windows VM (Hyper-V) or Windows Sandbox with autologon and the same agent is the isolated
+  fallback, at the cost of slower iteration.
+
 ## Environment notes
 
 - The repository may be on a root-owned mount; use `git -c safe.directory=$PWD ...`.
