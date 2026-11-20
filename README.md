@@ -503,6 +503,8 @@ Other languages add theirs to the name (`heartgold-it.sav`, `black2-es.sav` ...)
   memory instead, so your ROM file is untouched. A save that used Nintendo's old servers has an
   old WFC ID that Wiimmfi cannot take: in the game, **NINTENDO WFC SETTINGS > OPTIONS > ERASE
   NINTENDO WFC CONFIGURATION** once (error 60000), then set the connection up again.
+  Full setup and troubleshooting (including every error code and what to put in a bug report):
+  [docs/WFC-AND-MYSTERY-GIFTS.md](docs/WFC-AND-MYSTERY-GIFTS.md).
 
 ### Updates
 

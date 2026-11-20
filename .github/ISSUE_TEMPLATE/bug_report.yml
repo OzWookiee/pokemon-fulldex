@@ -150,6 +150,18 @@ body:
         2. Talk to the Poke Mart clerk
         3. ...
 
+  - type: dropdown
+    id: wfc
+    attributes:
+      label: Online play or Mystery Gifts (optional)
+      description: If the problem involves Nintendo WFC, which server is chosen in SETTINGS > OPTIONAL FEATURES? See docs/WFC-AND-MYSTERY-GIFTS.md for setup and known error codes.
+      options:
+        - Not using online features
+        - AltWFC / WFZwei
+        - Wiimmfi
+        - Another server (say which below)
+        - Not sure
+
   - type: textarea
     id: log
     attributes:
