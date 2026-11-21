@@ -95,26 +95,60 @@ inline std::string Tail(const std::string& path, int lines, std::size_t maxBytes
     return out;
 }
 
+// One folder taken out of text, written with either separator and, on Windows, in any case.
+// (C:\Users\Name, C:/Users/name and c:\users\NAME all name the same folder there.) Also used by
+// the tests, so the Windows forms can be checked on any machine.
+inline void RedactHome(std::string& text, std::string home, bool ignoreCase)
+{
+    while (!home.empty() && (home.back() == '/' || home.back() == '\\')) home.pop_back();
+    if (home.empty()) return;
+
+    std::string swapped = home;
+    for (char& c : swapped)
+        c = c == '\\' ? '/' : c == '/' ? '\\' : c;
+
+    auto same = [ignoreCase](char a, char b) {
+        if (a == b) return true;
+        if (!ignoreCase) return false;
+        if (a >= 'A' && a <= 'Z') a = (char)(a - 'A' + 'a');
+        if (b >= 'A' && b <= 'Z') b = (char)(b - 'A' + 'a');
+        return a == b;
+    };
+    auto find = [&](const std::string& needle, std::size_t from) {
+        if (needle.empty() || from >= text.size() || needle.size() > text.size() - from) return std::string::npos;
+        for (std::size_t at = from; at + needle.size() <= text.size(); at++)
+        {
+            std::size_t i = 0;
+            while (i < needle.size() && same(text[at + i], needle[i])) i++;
+            if (i == needle.size()) return at;
+        }
+        return std::string::npos;
+    };
+
+    for (const std::string& form : { home, swapped })
+        for (std::size_t at = find(form, 0); at != std::string::npos; at = find(form, at + 1))
+            text.replace(at, form.size(), "~");
+}
+
 // A path with the player's own folder taken out, so a public issue does not carry their name.
 inline void Redact(std::string& text)
 {
     std::vector<std::string> homes;
     for (const char* name : { "HOME", "USERPROFILE" })
         if (const char* h = std::getenv(name); h && *h) homes.push_back(h);
-    for (const std::string& home : homes)
-        for (std::size_t at = text.find(home); at != std::string::npos; at = text.find(home, at + 1))
-            text.replace(at, home.size(), "~");
 #ifdef _WIN32
     // (C:\Users\name, when USERPROFILE is not set.)
     if (homes.empty())
         if (const char* drive = std::getenv("HOMEDRIVE"))
             if (const char* path = std::getenv("HOMEPATH"))
-            {
-                const std::string home = std::string(drive) + path;
-                for (std::size_t at = text.find(home); at != std::string::npos; at = text.find(home, at + 1))
-                    text.replace(at, home.size(), "~");
-            }
+                homes.push_back(std::string(drive) + path);
+    // (A Windows path names the same folder in either case and with either separator.)
+    const bool ignoreCase = true;
+#else
+    // (On a case-sensitive filesystem another case is another folder.)
+    const bool ignoreCase = false;
 #endif
+    for (const std::string& home : homes) RedactHome(text, home, ignoreCase);
 }
 
 inline std::string Now()

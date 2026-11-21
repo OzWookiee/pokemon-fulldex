@@ -54,6 +54,33 @@ int main(int argc, char** argv)
     const std::string written((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
     assert(written == gCopied);
 
+    // The player's folder in either separator, and on Windows in any case.
+    {
+        std::string text = "C:\\Users\\Alice\\a.sav C:/Users/alice/b.sav c:\\users\\ALICE\\c.sav";
+        Diagnostics::RedactHome(text, "C:\\Users\\Alice", true);
+        assert(text == "~\\a.sav ~/b.sav ~\\c.sav");
+
+        // (On a case-sensitive filesystem another case is another folder.)
+        std::string posix = "/home/Bob/x /home/bob/y";
+        Diagnostics::RedactHome(posix, "/home/bob", false);
+        assert(posix == "/home/Bob/x ~/y");
+
+        // (A folder written with a trailing separator.)
+        std::string trailing = "C:/Users/Alice/x";
+        Diagnostics::RedactHome(trailing, "C:\\Users\\Alice\\", true);
+        assert(trailing == "~/x");
+    }
+#ifndef _WIN32
+    // (Redact() takes USERPROFILE's forward-slash form too; set it here so this is checked on Linux.)
+    {
+        setenv("USERPROFILE", "C:\\Users\\Alice", 1);
+        std::string text = "C:/Users/Alice/x";
+        Diagnostics::Redact(text);
+        unsetenv("USERPROFILE");
+        assert(text == "~/x");
+    }
+#endif
+
     // No log yet: the report still builds, and says so.
     const std::string missing = Diagnostics::Build(dir + "/not-there.log", {});
     assert(missing.find("the log is empty") != std::string::npos);
